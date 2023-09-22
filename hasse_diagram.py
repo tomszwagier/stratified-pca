@@ -28,7 +28,8 @@ def build_hasse_diagram(hasse_diagram, root):
 
 if __name__ == '__main__':
     np.random.seed(42)
-    plot_choice = "original"  # original / hierarchical / trajectories
+    path = os.path.dirname(__file__) + "/figures/"
+    plot_choice = "trajectories"  # original / hierarchical / trajectories
 
     p = 5
     hasse_diagram = nx.DiGraph()
@@ -62,6 +63,7 @@ if __name__ == '__main__':
     cbar.set_label('Model Dimension')
     plt.tight_layout()
     plt.axis("off")
-    plt.savefig(os.path.join(os.path.dirname(__file__), f"figures/hasse_{plot_choice}.png"), dpi='figure', format='png', transparent=True)
-    plt.savefig(os.path.join(os.path.dirname(__file__), f"figures/hasse_{plot_choice}.pdf"), dpi='figure', format='pdf', transparent=True)
-    plt.savefig(os.path.join(os.path.dirname(__file__), f"figures/hasse_{plot_choice}.svg"), dpi='figure', format='svg', transparent=True)
+    plt.savefig(path + f"hasse_{plot_choice}.png", dpi='figure', format='png', transparent=True)
+    plt.savefig(path + f"hasse_{plot_choice}.pdf", dpi='figure', format='pdf', transparent=True)
+    plt.savefig(path + f"hasse_{plot_choice}.svg", dpi='figure', format='svg', transparent=True)
+    plt.close()
