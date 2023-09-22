@@ -1,5 +1,8 @@
 import itertools
+import matplotlib.pyplot as plt
 import numpy as np
+import os
+from scipy.cluster.hierarchy import dendrogram
 
 from inference import bic_fast, evd, maximum_log_likelihood_fast
 
@@ -94,3 +97,36 @@ def type_length_model_selection(X, cardinal, criterion="BIC"):
             best_model = model
             best_score = score
     return best_model, best_score
+
+
+if __name__ == '__main__':
+    np.random.seed(42)
+    path = os.path.dirname(__file__) + "/figures/"
+
+    p = 15
+    n = 5000
+    eigval_pop = [1]
+    eigengaps_pop = np.random.rand(p) / 5
+    eigengaps_pop[eigengaps_pop < .1] = 0
+    for i in range(p - 1):
+        eigval_pop.append(eigval_pop[-1] - eigengaps_pop[i])
+
+    X = np.random.multivariate_normal(np.zeros(p), np.diag(eigval_pop), n)
+    eigval, eigvec, mu, n, p = evd(X)
+
+    models, linkage_matrix = hierarchical_model_selection(eigval, dist=lambda l1, l2: (l1 - l2) / l1, return_linkage_matrix=True)
+    BIC = dict([(model, bic_fast(eigval, eigvec, mu, n, p, model)) for model in models])
+    best_model = sorted(BIC, key=BIC.get, reverse=False)[0]
+
+    labels = np.zeros((p,))
+    for j in range(p):
+        if j in np.cumsum(best_model):
+            labels[j:] += 1
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5))
+    n_clusters = 1 + int(np.max(labels))
+    ax1.bar(np.arange(0, p), eigval, color=plt.cm.get_cmap('coolwarm')(1 - labels / np.max(labels)))
+    dendrogram(linkage_matrix, color_threshold=0, ax=ax2)
+    plt.savefig(path + "hierarchical_clustering.png", dpi='figure', format='png', transparent=True)
+    plt.savefig(path + "hierarchical_clustering.pdf", dpi='figure', format='pdf', transparent=True)
+    plt.savefig(path + "hierarchical_clustering.svg", dpi='figure', format='svg', transparent=True)
+    plt.close()
