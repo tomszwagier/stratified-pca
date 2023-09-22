@@ -1,14 +1,13 @@
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
 
-from inference import bic
+from inference import bic_fast, evd
 from model_selection import generate_models, hierarchical_model_selection, type_length_model_selection
 
 if __name__ == '__main__':
     np.random.seed(42)
-    dataset = "wdbc"  # [wine, glass, ionosphere, wdbc]
+    dataset = "glass"  # [wine, glass, ionosphere, wdbc]
 
     data = pd.read_csv(os.path.join(os.path.dirname(__file__), f"data/{dataset}.data"), sep=",")
     data = data[~(data == '?').any(axis=1)]
@@ -32,32 +31,19 @@ if __name__ == '__main__':
     if dataset in ["wdbc", "wine"]:
         data_X /= np.std(data_X, axis=0)
 
-    n, p = data_X.shape
-    S = (1 / n) * data_X.T @ data_X
-    eigval, _ = np.linalg.eigh(S)
-    eigval = np.flip(eigval, -1)
-    eigval = np.clip(eigval, 0, np.inf)
+    eigval, eigvec, mu, n, p = evd(data_X)
     relative_eigengaps = (eigval[:-1] - eigval[1:]) / eigval[:-1]
     print(relative_eigengaps)
 
     models_SPCA = hierarchical_model_selection(eigval, dist=lambda l1, l2: (l1 - l2) / l1)
     for model in models_SPCA:
-        print(f"{model}  -- BIC = {bic(data_X, model):.2f}")
+        print(f"{model}  -- BIC = {bic_fast(eigval, eigvec, mu, n, p, model):.2f}")
     models_PPCA = generate_models(p, "PPCA")
     for model in models_PPCA:
-        print(f"{model}  -- BIC = {bic(data_X, model):.2f}")
+        print(f"{model}  -- BIC = {bic_fast(eigval, eigvec, mu, n, p, model):.2f}")
     print("\n==========\n")
     for cardinal in [1, 2, 3, 4, p]:
         model, BIC = type_length_model_selection(data_X, cardinal, criterion="BIC")
         print(f"{model}  -- BIC = {BIC:.2f}")
         model = (1,) * (cardinal - 1) + (p - (cardinal - 1),)
-        print(f"{model}  -- BIC = {bic(data_X, model):.2f}")
-
-
-
-
-
-
-
-
-
+        print(f"{model}  -- BIC = {bic_fast(eigval, eigvec, mu, n, p, model):.2f}")

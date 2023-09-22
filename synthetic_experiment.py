@@ -2,44 +2,45 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-from inference import maximum_log_likelihood, model_dimension
+from inference import evd, bic_fast, model_dimension
 from model_selection import generate_models
 
 
-def run_bic_trajectories(mean, S_pop, models, n_space, nb_indep_space, compare_PPCA=False):
+def run_bic_trajectories(mean, S_pop, models, n_space, nb_indep_space):
+    """ Perform the synthetic experiment of Subsection 5.1.
+    """
     bic_results = []
     bic_mean = []
     bic_model_choice_percentage = []
-    if compare_PPCA:
-        bic_model_choice_percentage_PPCA = []
-        PPCA_models = generate_models(S_pop.shape[0], family="PPCA")
-        indexes_PPCA = [models.index(model) for model in PPCA_models]
+    bic_model_choice_percentage_PPCA = []
+    PPCA_models = generate_models(S_pop.shape[0], family="PPCA")
+    indexes_PPCA = [models.index(model) for model in PPCA_models]
     for i, (n, nb_indep) in enumerate(zip(n_space, nb_indep_space)):
         print(i / len(n_space))
         bic_n = np.zeros((nb_indep, len(models)))
         for j in range(nb_indep):
-            X = np.random.multivariate_normal(mean, S_pop, size=n // 1)
+            X = np.random.multivariate_normal(mean, S_pop, size=n)
+            eigval, eigvec, mu_ML, n, p = evd(X)
             for k, model in enumerate(models):
-                dim = model_dimension(model)
-                bic = 1 / n * (dim * np.log(n) - 2 * maximum_log_likelihood(X, model))
+                bic = bic_fast(eigval, eigvec, mu_ML, n, p, model)
                 bic_n[j, k] = bic
+
         bic_n_mean = np.mean(bic_n, axis=0)
         bic_model_choice = np.argmin(bic_n, axis=1)
         unique, counts = np.unique(bic_model_choice, return_counts=True)
         bic_n_model_choice_percentage = np.zeros(len(models))
         for l, model in enumerate(unique):
             bic_n_model_choice_percentage[model] = counts[l] / nb_indep
+        bic_model_choice_PPCA = np.argmin(bic_n[:, indexes_PPCA], axis=1)
+        unique_PPCA, counts_PPCA = np.unique(bic_model_choice_PPCA, return_counts=True)
+        bic_n_model_choice_percentage_PPCA = np.zeros(len(PPCA_models))
+        for l, model in enumerate(unique_PPCA):
+            bic_n_model_choice_percentage_PPCA[model] = counts_PPCA[l] / nb_indep
 
-        if compare_PPCA:
-            bic_model_choice_f = np.argmin(bic_n[:, indexes_PPCA], axis=1)
-            unique_f, counts_f = np.unique(bic_model_choice_f, return_counts=True)
-            bic_n_model_choice_percentage_f = np.zeros(len(PPCA_models))
-            for l, model in enumerate(unique_f):
-                bic_n_model_choice_percentage_f[model] = counts_f[l] / nb_indep
-            bic_model_choice_percentage_PPCA.append(bic_n_model_choice_percentage_f)
         bic_results.append(bic_n)
         bic_mean.append(bic_n_mean)
         bic_model_choice_percentage.append(bic_n_model_choice_percentage)
+        bic_model_choice_percentage_PPCA.append(bic_n_model_choice_percentage_PPCA)
 
     bic_mean = np.array(bic_mean)
     bic_model_choice_percentage = np.array(bic_model_choice_percentage)
@@ -52,7 +53,7 @@ if __name__ == '__main__':
     np.random.seed(42)
     path = os.path.dirname(__file__) + "/figures/"
 
-    # RUN BIC EXPERIMENT
+    # Run synthetic experiment
     p = 5
     mean = np.random.rand(p)
     Sigma_pop = [10, 9, 7, 4, .5]
@@ -67,9 +68,9 @@ if __name__ == '__main__':
     SPCA_models_dim = dict([(model, model_dimension(model)) for model in generate_models(p, family="SPCA")])
     SPCA_models = sorted(SPCA_models_dim, key=SPCA_models_dim.get, reverse=False)
     models = SPCA_models
-    bic_results, bic_mean, bic_model_choice_percentage, bic_model_choice_percentage_f = run_bic_trajectories(mean, S_pop, models, n_space, nb_indep_space, compare_PPCA=True)
+    bic_results, bic_mean, bic_model_choice_percentage, bic_model_choice_percentage_PPCA = run_bic_trajectories(mean, S_pop, models, n_space, nb_indep_space)
 
-    # PLOT
+    # Plot the results
     vmin, vmax = min(SPCA_models_dim.values()), max(SPCA_models_dim.values())
     sm = plt.cm.ScalarMappable(cmap=plt.cm.coolwarm, norm=plt.Normalize(vmin=vmin, vmax=vmax))
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 10), gridspec_kw={'width_ratios': [1, 9]})
@@ -105,9 +106,9 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(8, 8))
     complexity_SPCA_hard = np.array([model_dimension(model) for model in SPCA_models])[np.argmax(bic_model_choice_percentage, axis=1)]
-    complexity_PPCA_hard = np.array([model_dimension(model) for model in PPCA_models])[np.argmax(bic_model_choice_percentage_f, axis=1)]
+    complexity_PPCA_hard = np.array([model_dimension(model) for model in PPCA_models])[np.argmax(bic_model_choice_percentage_PPCA, axis=1)]
     complexity_SPCA_weighted = bic_model_choice_percentage @ np.array([SPCA_models_dim[model] for model in SPCA_models])
-    complexity_PPCA_weighted = bic_model_choice_percentage_f @ np.array([SPCA_models_dim[model] for model in PPCA_models])
+    complexity_PPCA_weighted = bic_model_choice_percentage_PPCA @ np.array([SPCA_models_dim[model] for model in PPCA_models])
     plt.plot(n_space, complexity_PPCA_hard, color='tab:red', linewidth=5, label="PPCA - most selected")
     plt.plot(n_space, complexity_PPCA_weighted, color='tab:red', linewidth=5, ls='--', label="PCA - averaged")
     plt.plot(n_space, complexity_SPCA_hard, color='tab:blue', linewidth=5, label="SPCA - most selected")

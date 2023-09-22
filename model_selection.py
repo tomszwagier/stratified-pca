@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
 
-from inference import bic, maximum_log_likelihood
+from inference import bic_fast, evd, maximum_log_likelihood_fast
 
 
 def generate_models(p, family="SPCA", cardinal=None):
@@ -83,13 +83,13 @@ def type_length_model_selection(X, cardinal, criterion="BIC"):
     """ Perform model selection within the fixed type length heuristic.
     Cf. Subsubsection 4.4.2.
     """
-    n, p = X.shape
-    criterion_fun = (lambda X, model : - maximum_log_likelihood(X, model)) if criterion == "ML" else bic
+    eigval, eigvec, mu_ML, n, p = evd(X)
+    criterion_fun = (lambda eigval, eigvec, mu_ML, n, p, model: - maximum_log_likelihood_fast(eigval, eigvec, mu_ML, n, p, model)) if criterion == "ML" else bic_fast
     models = generate_models(p, family="SPCA", cardinal=cardinal)
     best_model = models[0]
-    best_score = criterion_fun(X, best_model)
+    best_score = criterion_fun(eigval, eigvec, mu_ML, n, p, best_model)
     for model in models[1:]:
-        score = criterion_fun(X, model)
+        score = criterion_fun(eigval, eigvec, mu_ML, n, p, model)
         if score < best_score:
             best_model = model
             best_score = score
